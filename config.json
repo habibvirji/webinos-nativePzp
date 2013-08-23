@@ -1,0 +1,15 @@
+{
+    "certConfig":{
+        "country": "UK",
+        "state"  : "MX",
+        "city"   : "London",
+        "orgname": "Webinos",
+        "orgunit": "WP4",
+        "email"  : "hello@webinos.org"
+    },
+    "ports": {
+        "pzp_tlsServer": 8040
+    },
+    "friendlyName": "",
+    "retryConnection": 12000
+}
