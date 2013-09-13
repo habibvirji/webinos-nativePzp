@@ -10,6 +10,6 @@
     "ports": {
         "pzp_tlsServer": 8040
     },
-    "friendlyName": "",
+    "friendlyName": "microPzp",
     "retryConnection": 12000
 }

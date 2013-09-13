@@ -1,11 +1,15 @@
 #include <sys/types.h> 
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h> // for inet_addr
+#include <unistd.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include "../webinos.h"
 
+// Standard multicast connection. Listening at address 224.0.0.251 at post 5353
 int setMulticastConnection(){
     int s, flag = 1, ittl = 255;
     struct sockaddr_in in;
@@ -41,56 +45,53 @@ int setMulticastConnection(){
     return s;
 }
 
-struct {
-    unsigned short int id;
-    unsigned short int flags;
-    unsigned short int qcount;
-    unsigned short int ancount;
-    unsigned short int nscount;
-    unsigned short int  rcount;
-} header;
 
-typedef struct _msg{
-
-    char *serviceName;
-    unsigned short int  qtype;
-    unsigned short int  qclass;
-}mDNSMsg;
-
-void findPzp(){
+char* findPzp(char *ret){
     int socketDesc = setMulticastConnection();
     unsigned char buf[9000];
     unsigned char outMsg[1000];
     char *tmp;
     char servType[] = "_pzp._tcp.local";
     struct sockaddr_in to, dest;
-    int size = sizeof(struct sockaddr);
+    socklen_t size = sizeof(struct sockaddr_in);
     fd_set fds;
-    int msgSize =0;
+    unsigned int msgSize =0;
+    struct timeval t;
+    char *machineName = NULL;
+
     bzero(&to, sizeof(to));
     bzero(&dest, sizeof(dest));
     to.sin_family = AF_INET;
-    to.sin_port = htons(4321);
+    to.sin_port = htons(5353);
     to.sin_addr.s_addr = inet_addr("224.0.0.251");
 
-    unsigned short int yes  = htons(1)  ;
+    t.tv_sec = 30; // Every 30 sec look for a PZP
+    t.tv_usec = 0;
+
+    unsigned short int yes;
     unsigned short int no = 0;
     int i = 0, j =0, psize =0, pos=0;
-
+    /*
+    HEADER STRUCTURE
+    \ID|FLAG|QCOUNT|ANCOUNT|NSCOUNT|ARCOUNT|
+      2  2      2      2       2       2
+    */
     memcpy(outMsg,          &no, 2);
     msgSize+=2;
     memcpy(outMsg+msgSize,  &no, 2);
     msgSize+=2;
-    memcpy(outMsg+msgSize,  &yes, 2);
+    yes = htons(1);
+    memcpy(outMsg+msgSize,  &yes,2);
     msgSize+=2;
     memcpy(outMsg+msgSize,  &no, 2);
     msgSize+=2;
     memcpy(outMsg+msgSize,  &no, 2);
     msgSize+=2;
-    memcpy(outMsg+msgSize, &no, 2);
+    memcpy(outMsg+msgSize,  &no, 2);
     msgSize+=2;
-    tmp = calloc(1, strlen(servType));
 
+    // Create tmpName of form Len|Str \004_pzp\004_tcp\005local0x00
+    tmp = calloc(1, strlen(servType) + 10);// Arbitrary 10 to handle 10 servtype length fields
     while(servType[j]){
         if (servType[j] == '.') {
             memcpy(outMsg+msgSize, &i, 1);// length of the string;
@@ -101,16 +102,21 @@ void findPzp(){
          } else {
             tmp[i++] = servType[j];
         }
-        (j++);
+        j++;
     }
+    // To add local at the end and append 0x00
     if (tmp) {
         memcpy(outMsg+msgSize, &i, 1);// length of the string;
         msgSize+=1;
         memcpy(outMsg+msgSize, tmp, i+1);// length of the string;
         msgSize+=i+1;
     }
-    strncpy(tmp, outMsg+12, msgSize -12);
+    strncpy(tmp, (char*)outMsg+12, msgSize -12); // store this tmp for future purpose
 
+    /*
+    At end of query add: QTYPE|QCLASS
+                           2     2
+    */
     yes = htons(1);
     memcpy(outMsg+msgSize, &yes, 2);
     msgSize+=2;
@@ -119,60 +125,95 @@ void findPzp(){
     memcpy(outMsg+msgSize, &yes, 2);
     msgSize+=2;
 
+    // Send Query Request
     sendto(socketDesc, outMsg, msgSize , 0, (struct sockaddr*)&to, sizeof(to));
-    struct timeval t;
-    t.tv_sec = 10; // Every 10 sec look for a PZP
-    t.tv_usec = 0;
+    // TODO: Send message again on timeout
 
     while(1) {
         FD_ZERO(&fds);
         FD_SET(socketDesc,&fds);
-        select(socketDesc+1,&fds,0,0, &t);
+        select(socketDesc+1,&fds,0,0, &t); // Set time interval to listen on this descriptor
 
         if(FD_ISSET(socketDesc,&fds)) {
             if ((psize = recvfrom(socketDesc, buf, sizeof(buf), 0, (struct sockaddr*)&dest, &size)) > 0 ) {
+                // print out the whole packets
                 i = 0;
-                /*printf("\nPacket Size: (%d) Packet Data:",psize);
+                printf("\nPacket Size: (%d)\n",psize);
                 while (i != psize){
-                    printf("  0x%x", buf[i++]);
-                }             */
+                    printf("  0x%2x", buf[i++]);
+                    if (i%20 == 0) printf("\n");
+                }
                 // byte 3 contains flags that gives indication if it is a response
                 if (buf[2] == 132) {///0x84 that means response
-                    pos = 12;
+                    pos = 12; // By pass header..
 
+                    // Loop to calculate length of response service type.
+                    // Format is usually Len|Str \008_machine\004_pzp\004_tcp\005local0x00
                     while(buf[pos] != 0) {
-                        pos += 1 + buf[pos]; // 1 for length
+                        pos += 1 + buf[pos]; // 1 for length before string
+                    }
+                    // Now check whether service type is one we are looking for
+                    char *deb = strndup((char*)buf+12, pos-12); // Start after header till above loop found position
+                    int diff = 0;
+
+                    pos += 1; // end character
+                    // As per DNS spec, our query service type should match but we get machine name in front of the
+                    // message. We query \004_pzp\004_tcp\005local0x00 but get machine name appended in front
+                    // \008_machine\004_pzp\004_tcp\005local0x00
+                    if (strlen(tmp) == strlen(deb)) {
+                       // This is correct scenario but machine responds with their machine name in front of service,
+                       // so we need to remove that
+                    } else if (strlen(tmp) < strlen(deb)){
+                        diff = strlen(deb)-strlen(tmp); // Calculate length of machine name
                     }
 
-                    char *deb = strndup(buf+12, pos-12);
-                    printf("\n debug : %s %s", deb, tmp);
-                    free(deb);
-                    pos += 1; // end character
+                    if (strncmp(tmp, (char*)(buf+12+diff), pos-12-diff) == 0){ // Check query string that we sent matches
+                                                                               // by removing machine name
+                        if (diff > 0) {
+                            machineName = calloc(1, diff);
+                            machineName= strndup((char*)buf+13, diff-1); // This is not freed here. caller should free it
+                        } // Machine name we sent to check peer PZP
 
-                    if (strncmp(tmp, buf+12, pos-12) == 0){ // Check string that we sent matches
-                        // I just need IP address rest of the information does not matter
-                        while(pos < psize){
+                        // just need IP address rest of the information does not matter at the moment
+                        while(pos < psize){ // Loop till end of packet
                             if(buf[pos + 1] == 1 ) { // Looking for Only IPV4 address
                                 pos += 2 + 2 + 4;   //  Type (2)+ ClassCode (2)+ TTL (4)
-                                if (pos+1 == 4) {
-                                    pos += 2;
-                                    printf("\n IP ADDRESS FOUND: %d.%d.%d.%d", buf[pos+1], buf[pos+2], buf[pos+3],
-                                    buf[pos+4]);
+                                if (buf[pos+1] == 4) { // Length of ip packet should be 4. We could check rest of the
+                                                        // fields such as type, classcode... but omitting at the moment
+                                    pos += 2; // Increment length
+                                    sprintf(ret, "%d.%d.%d.%d",buf[pos], buf[pos+1], buf[pos+2], buf[pos+3]);
+                                    free(deb);
+                                    free(tmp);
+                                    // Need to free machineName at receiving end
+                                    return machineName; // End our search as we already found our PZP
                                 }
                             } else {
                                 pos += 2 + 2 + 4;   // Type (2)+ ClassCode (2)+ TTL (4)
-                                pos += buf[pos+1];  // Length
-                                if(pos < psize) pos+=4;// Offset
+                                pos += buf[pos+1];  // Length of the message
+                                pos += 2;// Length field
+                                if(pos < psize) pos+=2;// Offset
                             }
                         }
+                        free(deb);
+                        break;
                     }
+                    free(deb);
+//                    if( sendto(socketDesc, outMsg, msgSize , 0, (struct sockaddr*)&to, sizeof(to)) != msgSize){
+//                      printf("\n Error Sending Message");
+//                    }
                 }
-            }
+           }
         }
     }
-
+    return machineName;
 }
-
+/*
 int main() {
-    findPzp();
+    char *ipAddress=calloc(1, 8);
+    char *machineName = findPzp(ipAddress);
+    printf("\n Found Machine Name: %s, %s", machineName, ipAddress);
+    free(machineName);
+    free(ipAddress);
+    return 1;
 }
+*/

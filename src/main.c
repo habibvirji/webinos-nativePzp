@@ -1,26 +1,20 @@
-#include "jsonHandler/json.h"
-#include "certificate.h"
-#include "configuration.h"
-#include "localDiscovery.h"
-#include "connect.h"
-#include "logger.h"
+#include "webinos.h"
+#include "ssl/certificate.h"
 
-#include <string.h>
 #include <stdlib.h>
-
-#include "polarssl/rsa.h"
-
-void foundPzpAddress(char *address){
-    LOG("Connect to PZP to Enroll : %s", address);
-    connectPzp(address);
-}
+#include <unistd.h>
 
 void initializePzp(){
-    WebinosJSON *config = readConfig("config.json");
+    char buf[1024];
+    getcwd(buf, sizeof(buf));
+    strcat(buf, "/config.json");
+    JSON *config = readConfig(buf);
+
     char *deviceName = getDeviceName();
     rsa_context rsa;
 
     addItem(&config,"commonName" , deviceName);
+    printJSON(config);
     LOG("Webinos File Configuration Read");
 
     generatePrivateKey(&rsa);
@@ -29,16 +23,21 @@ void initializePzp(){
     generateCertificateRequest(config, &rsa);
     LOG("CSR Generated");
 
-    findPzp(foundPzpAddress);
-    LOG("Found PZP to Connect and Enroll");
+    char *ipAddress = calloc(1, 16);
+    char *machineName = findPzp(ipAddress);
+    LOG("Found PZP - %s (IP Address:%s) to Connect and Enroll", machineName, ipAddress);
+    connectPzp(machineName, ipAddress);
 
     rsa_free(&rsa);
     free(config);
+    free(ipAddress);
+    free(machineName);
 }
+
 int main(int argc, char *argv[]){
     initializePzp();
     /*if (!checkConfiguration()) {
-
+        initializePzp();
     } else {
         connectPzp();
     }*/

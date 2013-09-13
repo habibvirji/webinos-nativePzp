@@ -1,10 +1,7 @@
 CC = gcc
 
-LDFLAGS= -L ./polarssl/library/ -l polarssl  -l avahi-client -l avahi-common
-CFLAGS = -I ./polarssl/include/ -g  -Wall
+LDFLAGS= -L ./src/ssl/polarssl/library/ -l polarssl
+CFLAGS = -I ./src/ssl/polarssl/include/ -Wall  -g
 
-all: main.c jsonHandler/json.c certificate.c configuration.c connect.c localDiscovery.c logger.c
-	 $(CC) $(CFLAGS) logger.c localDiscovery.c  jsonHandler/json.c certificate.c configuration.c connect.c  main.c $(LDFLAGS) -o native_webinos
-
-
-
+all: src/main.c src/jsonHandler/json.c src/ssl/certificate.c src/common/configuration.c src/ssl/connect.c src/localDiscovery/localDiscovery.c src/common/logger.c
+	$(CC) $(CFLAGS) src/common/logger.c src/localDiscovery/localDiscovery.c  src/jsonHandler/json.c src/ssl/certificate.c src/common/configuration.c src/ssl/connect.c  src/main.c $(LDFLAGS) -o native_webinos

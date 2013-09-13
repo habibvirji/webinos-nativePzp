@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "logger.h"
+#include "../webinos.h"
 
 void logPrint(char *file, int line, char *fmt, ...){
     va_list list;

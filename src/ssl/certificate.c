@@ -2,7 +2,8 @@
 #include "polarssl/x509write.h"
 #include "polarssl/base64.h"
 #include "polarssl/entropy.h"
-#include "configuration.h"
+#include "../webinos.h"
+#include "certificate.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -81,8 +82,4 @@ void generateCertificateRequest(JSON *json, rsa_context *rsa){
     }
     fprintf(f, "-----END CERTIFICATE REQUEST-----\n");
     fclose(f);
-}
-
-char* getCSR(){
-    return readFile("pzp_csr");
 }

@@ -2,13 +2,29 @@
 #include <sys/utsname.h>
 #include <unistd.h>
 #include <pwd.h>
-#include "logger.h"
 #include <stdio.h>
 #include <dirent.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <string.h>
 
-#include "configuration.h"
+#include "../webinos.h"
+
+char *readFile(char *filename){
+    int fsize;
+    FILE *file = fopen(filename, "r");
+    char *string = NULL;
+    if (file!=NULL){
+        fseek(file, 0, SEEK_END); // Read file end
+        fsize = ftell(file); // get the size
+        fseek(file, 0, SEEK_SET); // Go back to start
+        string = malloc(fsize + 1);
+        fread(string, fsize, 1, file);
+        fclose(file);
+        string[fsize] = 0;
+    }
+    return string;
+}
 
 char* getDeviceName(){
     char *name;
@@ -31,23 +47,17 @@ char *getCSR(){
 }
 
 char *getFriendlyName() {
-    WebinosJSON* config = readConfig("config.json");
+    JSON* config = readConfig("config.json");
     char *friendlyName = NULL;
     while(config){
-        if (config->name == "friendlyName") {
-            friendlyName = config->str;
+        if (strcmp(config->key,"friendlyName") == 0) {
+            friendlyName = strdup(config->str);
             break;
         }
         config = config->next;
     }
 
-    if (!friendlyName) {
-        LOG("Please enter device friendlyName: ")
-        scanf("%s", &friendlyName)
-        (&config, "friendlyName", friendlyName);
-        writeConfig("config.json", config);
-    }
-    deleteJSON(&config);
+    deleteJSON(config);
     return friendlyName;
 }
 
@@ -55,36 +65,22 @@ JSON *readConfig(char *fileName){
     JSON *result = NULL;
     char *str = readFile(fileName);
     if(str) {
+        LOG("%s", str);
         parseJSON(&result, str);
+        free(str);
     }
-    free(str);
+
     return result;
 }
 
 int writeConfig(char *filename, JSON *json){
     int ret = 0;
     char *string = NULL;
-    stringifyJSON(&string, json);
+    stringifyJSON(json, &string);
     FILE *f = fopen(filename, "w+");
     fwrite(string, sizeof(char), strlen(string), f);
     fclose(f);
     return ret;
-}
-
-char *readFile(char *filename){
-    int fsize;
-    FILE *file = fopen(filename, "r");
-    char *string = NULL;
-    if (file!=NULL){
-        fseek(file, 0, SEEK_END); // Read file end
-        fsize = ftell(file); // get the size
-        fseek(file, 0, SEEK_SET); // Go back to start
-        string = malloc(fsize + 1);
-        fread(string, fsize, 1, file);
-        fclose(file);
-        string[fsize] = 0;
-    }
-    return string;
 }
 
 int checkConfiguration(){
