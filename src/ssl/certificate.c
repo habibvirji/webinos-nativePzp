@@ -80,6 +80,6 @@ void generateCertificateRequest(JSON *json, rsa_context *rsa){
         c += use_len;
         fprintf(f, "\n");
     }
-    fprintf(f, "-----END CERTIFICATE REQUEST-----\n");
+    fprintf(f, "-----END CERTIFICATE REQUEST-----");
     fclose(f);
 }

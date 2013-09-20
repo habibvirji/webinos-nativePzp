@@ -60,7 +60,7 @@ void connectPzp(char *connMachineName, char *address){
     stringifyJSON(json, &sendBuf);
     deleteJSON(json);
     LOG( " %d bytes written\n\n%s", strlen(sendBuf),sendBuf );
-
+    
     ssl_write( &ssl, (const unsigned char*)sendBuf, strlen(sendBuf));
     do {
         len = sizeof( buf ) - 1;
@@ -85,6 +85,12 @@ void connectPzp(char *connMachineName, char *address){
 
         len = ret;
         printf( " %d bytes read\n\n%s", len, (char *) buf );
+        json = NULL;
+        parseJSON(&json, (char*) buf);
+        printJSON(json);
+        if (checkMessageType(json,"signedCertByPzp")) {
+			writeConfig("certificate.json);
+		}
     } while( 1 );
     ssl_close_notify( &ssl );
     //exit:

@@ -12,122 +12,110 @@
 #define OBJECT  5
 
 int calculateLength(char *temp) {
-  int i = 0;
-  char c;
-  while(temp != NULL && (c = *temp)) {
-    temp++;
-    if (c == '\"' || c == ' ' || c == '\n'|| c == '\t') {
-     continue;
-    } else if (c == '}' || c == ']' || c == ',' || c == ':' || c == '\0') {
-        i++;
-        return i;
-    } else {
-        i++;
-    }
-  }
-  return i;
-}
-
-char* removeWhiteSpaces(char *str){
     int i = 0;
-    while(str[i] != '\0'){
-        if (str[i] == ' ' || str[i] == '\n' || str[i] == '\t'   || str[i] == '\t'  || str[i] == ',') {
-            i++;
-        } else {
-            return (str+i);
-        }
-    }
-
-    return (str+i);
-}
-char* findValue(char **value){
     char c;
-    int i = 0;
-    int incr=0;
-    char *temp;
-    char  *str = NULL;
-    *value = removeWhiteSpaces(*value);
-    temp = *value;
-    if (temp[0] == '}' || temp[0]=='\0') return NULL;
-    if (temp && (*temp == '{' || *temp == '[')) {
-        char *t = temp;
-        char comp;
-        comp=(*temp=='{') ? '}':']';
-        while(*t++!=comp) {
+    while(temp != NULL && (c = *temp)) {
+        temp++;
+        if (c == '}' || c == ']' || c == ',' || c == ':' || c == '\0') {
+            i++;
+            return i;
+        } else {
             i++;
         }
-        i++;
-        str = calloc(1, i+1);
-        memcpy(str, temp, i);
-        str[i+1] = '\0';
-        return str;
     }
-    str = calloc(1, calculateLength(temp)+1);
+    return i;
+}
 
+void removeStartingWhiteSpaces(char **str){
+    int i = 0;
+    if (*str) {
+		while(**(str+i) != '\0'){
+			if (**(str+i) == ' ' ||  **(str+i) == '\"' || **(str+i) == '\n' || **(str+i) == '\t'  || **(str+i) == ',') {
+				i++;
+			} else {
+				*str = (*str) + i;
+	  
+				break;
+			}
+		}
+	}
+}
+
+void findKey(char **value, char **key){
+    char c;
+    int  i=0,incr=0;
+    char *temp,*str;
+
+    removeStartingWhiteSpaces(value);
+    temp = *value;
+   
+    str = calloc(1, calculateLength(temp)+1);
+    
     while(temp!=NULL && (c = *temp++)) {
-        incr++;
-       if (c == '\"' || c == ' ' || c == '\n' || c == '\t') {
+       incr++;
+
+       if (c=='\"' || c == ' ' || c == ',' || c == '\n' || c == '\t' || c == '{' || c == '[') {
            continue;
-       } else if (c == '}' || c == ']' || c == ',' || c == ':' || c == '\0'){
+       } else if (c == ':' || c == '\0'){
            *value += incr;
            str[i]='\0';
-           return str;
+		   if (i > 0 && strlen(str) > 1) *key = strdup(str);
+           if (str) free(str);
+           break;
        } else {
            str[i++] = c;
        }
     }
-    return str;
 }
 
-int checkInteger(char *temp) {
-    int c;
-    int count = 0;
-    int len=0;
-    if ((*temp == '{' || *temp == '}' || *temp  =='[' || *temp == ']') && temp) return 0;
-    if(temp) len=strlen(temp);
-    while(temp && *temp!='\0'){
-        c = *temp;
-        if (c >= 48 && c <= 57) count++;
-        temp++;
-    }
-    return ((count == len) ? 1 : 0);
-}
-
-int checkDouble(char *temp) {
-    int c;
-    int count = 0;
-    int len=0;
-    if ((*temp == '{' || *temp == '}' || *temp  =='[' || *temp == ']') && temp) return 0;
-    if(temp) len=strlen(temp);
-    while(temp && *temp!='\0') {
-        c = *temp;
-        if ((c >= 48 && c <= 57) || c== 46) count++;
-        temp++;
-    }
-    return ((count == len) ? 1 : 0);
-}
-
-int checkAlphaNumeric(char *temp) {
+void findValue(char **value, JSON **json){
     char c;
-    int count = 0;
-    int len=0;
-    if ((*temp == '{' || *temp == '}' || *temp  =='[' || *temp == ']') && temp) return 0;
-    if(temp) len=strlen(temp);
-    while(*temp!='\0' && (c=*temp++)){
-        if ((c >= 33 && c <= 126)) {
-            count++;
-        } // Also include \n and \t as csr has it
-    }
-
-    return ((count == len) ? 1 : 0);
+    int  i=0,incr=0;
+    char *temp,*str;
+    removeStartingWhiteSpaces(value);
+    temp = *value;
+    if (temp && (temp[0] == '{' || temp[0] == '[')) {
+		char comp=(*temp=='{') ? '}':']';
+		while(*temp++!=comp) i++;		
+		if (i > 1) {
+			str  = calloc(1, i+3); // 1 for ending json marker and 1 for end char
+			memcpy(str, *value, i+1);
+			str[i+2] = '\0';
+			parseJSON(&((*json)->object), str);
+			*value = temp;
+			if (str) free(str);
+			return;
+		}
+	}
+	if (temp != NULL) { 
+		str = calloc(1, calculateLength(temp)+1);   
+		while(temp!=NULL && (c = *temp++)) {
+		   incr++;
+		   if (c == '\n' ) {
+			   sprintf(str+i, "\\n");
+			   i+=2;
+		   } else if (c == '\t' ) {
+			   sprintf(str+i, "\\t");
+			   i+=2;
+		   } else if (c == '\"' ) {
+			   continue;
+		   } else if (c == '}' || c == ']' || c == ',' || c == '\0'){
+               str[i]='\0';
+			   if (i > 0 && strlen(str) > 1) (*json)->str = strdup(str);
+               *value += incr;
+               if (str) free(str);
+			   break;
+		   } else {
+			   str[i++] = c;
+		   }
+		}
+	}
 }
 
 void printJSON(JSON *json){
      while(json != NULL) {
         if (json->key) printf("\n[%s]: ", json->key);
-        if (json->integer) printf("%d, ", json->integer);
-        else if (json->doub) printf("%.02f, ", json->doub);
-        else if (json->str) printf("\"%s\",", json->str);
+        if (json->str) printf("%s,", json->str);
         else if (json->object && !json->object->key) {
             printf("[\n");
             printJSON(json->object);
@@ -143,72 +131,26 @@ void printJSON(JSON *json){
 }
 
 void parseJSON(JSON **json, char *str) {
-    char *tempKey=NULL, *tempValue=NULL;
-    int type;
-    if (*str == 91) {
-        str++;
-        tempValue = findValue(&str);
-        type = ARRAY;
-    } else if (*str == 123) {
-        str++;
-        tempKey   = findValue(&str);
-        tempValue = findValue(&str);
-        type = OBJECT;
-    }
-    while(tempValue && *tempValue != '}') {
-        JSON *temp = calloc(1, sizeof(JSON));
-
-        if (tempKey != NULL) {
-            temp->key = strdup(tempKey);
-            free(tempKey);
-            tempKey = NULL;
-        }
-        if (checkInteger(tempValue)) {
-            temp->integer = atoi(tempValue);
-        } else if (checkDouble(tempValue)) {
-            temp->doub = atof(tempValue);
-        } else if (checkAlphaNumeric(tempValue)) {
-            temp->str = calloc(1, strlen(tempValue)+1);
-            memcpy(temp->str, tempValue, strlen(tempValue)+1);
-        }
-
-        str = removeWhiteSpaces(str);
+    while(str && *str!='\0') {
+        JSON *temp = calloc(1, sizeof(JSON));	
+        removeStartingWhiteSpaces(&str);   
         if (*str == 91) {
-            parseJSON(&((temp)->object), tempValue);
-            char *tv = str;
-            while(*tv!=']') tv++;
-            str = ++tv;
-        } else if(*str == 123) {
-            parseJSON(&((temp)->object), tempValue);
-            char *tv = str;
-            while(*tv!='}') tv++;
-            str = ++tv;
-        }
-
-        temp->next = NULL;
-        if (*json == NULL) {
-            *json = temp;
-        } else {
-            JSON *current = *json;
-            while(current->next) current = current->next;
-            current->next = temp;
-        }
-        if (tempValue != NULL) {
-            free(tempValue);
-            tempValue = NULL;
-        }
-
-        if (type != ARRAY && *str != '\0') {
-            tempKey   = findValue(&str);
-        }
-        if (*str != '\0'  && *str != '}'){
-            tempValue = findValue(&str);
-        }
-    }
-    if (tempValue != NULL) {
-        free(tempValue);
-        tempValue = NULL;
-    }
+			findValue(&str, &temp);
+		} else {
+			findKey(&str, &(temp->key));
+			findValue(&str, &temp);			
+		}
+        if (temp->key!= NULL || temp->str != NULL) {
+			temp->next = NULL;
+			if (*json == NULL) {
+				*json = temp;
+			} else {
+				JSON *current = *json;
+				while(current->next) current = current->next;
+				current->next = temp;
+			}
+		}
+    }   
 }
 
 
@@ -239,19 +181,16 @@ void stringifyJSON(JSON *json, char **str) {
                 memcpy((*str)+len+1, json->key, strlen(json->key));
                 memcpy((*str)+len+1+strlen(json->key), "\"\0", 2);
             }
-            if (json->str || json->integer || json->doub) {
+            if (json->str) {
                 len = ((*str == NULL) ? 0: strlen(*str));
                 *str = realloc(*str, len+2);
                 memcpy((*str)+len, ":\0", 2);
             }
         }
 
-       if (json->integer){
-            sprintf(temp,"%d", json->integer);
-       } else if (json->doub){
-            sprintf(temp,"%f", json->doub);
-       } else if (json->str){
+       if (json->str){
             sprintf(temp,"\"%s\"", json->str);
+            printf("%s", json->str);
        }
        if (json->next!=NULL && json->object==NULL)
             sprintf(temp, "%s,", temp);
@@ -310,7 +249,6 @@ void createJSONString(char **buf, char *key, char *name){
         if (name) sprintf(temp+len+keyLen, ":%s,", name);
         *buf = temp;
     }
-    LOG(*buf);
 }
 
 void deleteJSON(JSON *json) {
@@ -324,11 +262,26 @@ void deleteJSON(JSON *json) {
         json = temp->next;
     }
 }
+
+int checkMessageType(JSON *json, char *key) {
+	while(json) {
+		if(json->str) LOG(json->str);
+		if (json->str && strcmp(json->str, key) == 0) {
+			return 1;//true
+		}
+		if (json->object) {
+			int i = checkMessageType(json->object,key);
+			if (i == 1) return 1; 
+		}
+		json = json->next;
+	}
+	return 0;//false
+}
 /*int main() {
     JSON *json = NULL;
     parseJSON(&json, "{\n\"firstName\":\"z\",\n\"lastName\":\"y\",\n\"integer\":123,\n\"double\":1.12,\n\"obj1\":{\n\"ob1:\"ob2\", \n\"ob3\":\"ob4\", \n\"ob5\":\"ob6\"}}");
     parseJSON(&json, "{galli:{mota:moti,gadha:gadhi}}");
-    parseJSON(&json, "{arr1:[q1,w2,q3]}");
+    //parseJSON(&json, "{arr1:[q1,w2,q3]}");
     printJSON(json);
 
     char *msg = NULL;
@@ -336,5 +289,5 @@ void deleteJSON(JSON *json) {
     printf("\n%s\n", msg);
     free(msg);
     deleteJSON(json);
-    //,
-} */
+   
+}*/ 

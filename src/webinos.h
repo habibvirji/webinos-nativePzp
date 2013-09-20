@@ -5,9 +5,7 @@ void logPrint(char *file, int line, char *fmt, ...);
 #define LOG(...) (logPrint(__FILE__, __LINE__, __VA_ARGS__))
 
 typedef struct _JSON{
-    char         *key;
-    int          integer;
-    double       doub;
+    char         *key;  
     char         *str;
     struct _JSON *object;
     int          type;
@@ -64,7 +62,7 @@ int checkConfiguration();
 char *getCSR();
 char *getFriendlyName();
 /**
- * Find Peer PZP. Needed for Enrolment.
+ * Find Peer PZP. Needed for Enrolmtent.
  * @params ipAddress - set IP address where service is found
  * @returns machine name. Caller needs to free the machine
 **/
@@ -75,5 +73,7 @@ char *findPzp(char *ipAddress);
  * params address - Address is retrieved from this step.
 **/
 void connectPzp(char *machineName, char *ipAddress);
+
+int checkMessageType(JSON *json, char *key);
 
 #endif
